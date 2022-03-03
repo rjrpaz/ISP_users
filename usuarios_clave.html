@@ -1,0 +1,66 @@
+#!/usr/bin/perl -w
+
+use usuarios;
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/usuarios/usuarios.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Administraci&oacute;n de Usuarios - Alta", "#ffffff");
+
+if ($http_referer =~ m/$url/)
+{
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $nueva_contrasena_a = param('nueva_contrasena_a');
+	my $nueva_contrasena_b = param('nueva_contrasena_b');
+
+	if (!(&chequeo_password_so_para_usuarios($usuario, $password)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	if (($nueva_contrasena_a !~ m/(.{$tamanio_minimo_contrasenia})/) || ($nueva_contrasena_b !~ m/(.{$tamanio_minimo_contrasenia})/))
+	{
+		&return_error_mysql ("Error", "Es recomendable que la nueva constrase&ntilde;a tenga un largo m&iacute;nimo de $tamanio_minimo_contrasenia caracteres", "")
+	}
+
+	if ($nueva_contrasena_a ne $nueva_contrasena_b)
+	{
+		&return_error_mysql ("Error", "Las dos ingresos de la nueva constrase&ntilde;a no coinciden", "")
+	}
+
+	if ($password eq $nueva_contrasena_a)
+	{
+		&return_error_mysql ("Error", "La nueva constrase&ntilde;a no difiere de la vieja", "")
+	}
+
+	&cambio_contrasena_radius($usuario, $nueva_contrasena_a);
+	&cambio_contrasena_so($usuario, $nueva_contrasena_a);
+	&cambio_contrasena_ftp($usuario, $nueva_contrasena_a);
+
+	&insertar_log ($usuario, "Cambio de Clave", "");
+
+print <<body;
+
+  <DIV ALIGN="center">
+   <B>
+    <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black" SIZE="4">
+     Hecho ...
+     <BR>
+     (A partir del pr&oacute;ximo uso, ya estar&aacute; utilizando la nueva contrase&ntilde;a)
+    </FONT>
+   </B>
+  </DIV>
+
+body
+}
+else
+{
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/usuarios/usuarios.html");
+
+exit(0);

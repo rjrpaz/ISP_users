@@ -1,0 +1,207 @@
+#!/usr/bin/perl -w
+
+use usuarios;
+use freeradius;
+use CGI qw(:standard escapeHTML);
+
+$url = "$server/usuarios/usuarios.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+
+print header();
+&head_html("", "Radius - Men&uacute; General", "#ffffff");
+
+if (defined($http_referer) && ($http_referer =~ m/$url/))
+{
+	my $menu = param('menu');
+
+	if ($menu eq "ConsultaSabana")
+	{
+		print "  <FORM ACTION=\"usuarios_sabana.html\" METHOD=\"post\">\n";
+		print "   <INPUT TYPE=\"hidden\" NAME=\"formato\" VALUE=\"html\">\n";
+		&validacion("Ingrese usuario y contrase&ntilde;a <BR> del acceso telef&oacute;nico");
+		&menu_usuarios_sabana();
+	}
+	elsif ($menu eq "CambioClave")
+	{
+		print "  <FORM ACTION=\"usuarios_clave.html\" METHOD=\"post\">\n";
+		&validacion("Ingrese usuario y contrase&ntilde;a de Cuenta");
+
+		print <<body;
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nueva Contrase&ntilde;a:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="password" NAME="nueva_contrasena_a" SIZE="20">
+     </TD>
+    </TR>
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Nueva Contrase&ntilde;a:
+        <BR>
+        (Confirmaci&oacute;n)
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="password" NAME="nueva_contrasena_b" SIZE="20">
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2">
+      <font face="Arial, Helvetica, Geneva, Swiss, SunSans-Regular" size="2">
+       <INPUT TYPE="submit" VALUE="    Cambiar    ">
+      </FONT>
+     </TD>
+    </TR>
+   </TABLE>
+  </FORM>
+  <BR>
+body
+	}
+	else
+	{
+		&return_error_mysql ("Error", "Opci&oacute;n no v&aacute;lida", "");
+	}
+}
+else
+{
+	print <<body;
+  <FORM ACTION="usuarios.html" METHOD="post\">
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        Men&uacute; General
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="ConsultaSabana" CHECKED>
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Consulta a la S&aacute;bana
+       <BR>
+       de Accesos Telef&oacute;nicos
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="center" COLSPAN="2" HEIGHT="10">
+      &nbsp;
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left">
+      <INPUT TYPE="radio" NAME="menu" VALUE="CambioClave">
+     </TD>
+     <TD ALIGN="left">
+      <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+       Cambio de Contrase&ntilde;a
+      </FONT>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        <INPUT TYPE="submit" VALUE="continuar">
+       </FONT>
+      </B>
+     </TD>
+    </TR>
+
+   </TABLE>
+  </FORM>
+body
+}
+&tail_html("");
+exit;
+
+
+sub validacion
+{
+	local (@parametro) = @_;
+	print <<body;
+   <TABLE COOL BORDER="0" CELLPADDING="0" CELLSPACING="0" ALIGN="center">
+    <TR>
+     <TD COLSPAN="2" ALIGN="center" CONTENT VALIGN="bottom">
+      <H1>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular">
+        $parametro[0]
+       </FONT>
+      </H1>
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Usuario:
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="text" NAME="usuario" SIZE="20">
+     </TD>
+    </TR>
+    <TR>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <B>
+       <FONT FACE="Arial,Helvetica,Geneva,Swiss,SunSans-Regular" COLOR="black">
+        Contrase&ntilde;a: 
+       </FONT>
+      </B>
+     </TD>
+     <TD ALIGN="left" CONTENT VALIGN="center">
+      <INPUT TYPE="password" NAME="password" SIZE="20">
+     </TD>
+    </TR>
+
+    <TR HEIGHT="20" cntrlrow>
+     <TD HEIGHT="20" ALIGN="right" XPOS="0" CONTENT VALIGN="middle" CSHEIGHT="32" NOWRAP COLSPAN="2">
+     </TD>
+    </TR>
+   </TABLE>
+body
+}
+

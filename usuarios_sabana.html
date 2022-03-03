@@ -1,0 +1,363 @@
+#!/usr/bin/perl -w
+
+use usuarios;
+use freeradius;
+use CGI qw(:standard escapeHTML);
+use Spreadsheet::WriteExcel::Simple;
+
+$url = "$server/usuarios/usuarios.html";
+$url_1 = "$server/usuarios/usuarios_sabana.html";
+$http_referer = $ENV{'HTTP_REFERER'};
+my $errmsg = "";
+my $ss = Spreadsheet::WriteExcel::Simple->new;
+
+if (($http_referer =~ m/$url/) || ($http_referer =~ m/$url_1/))
+{
+	my $usuario = param('usuario');
+	my $password = param('password');
+	my $formato = param('formato');
+	my $dia_inicial = param('dia_inicial');
+	my $mes_inicial = param('mes_inicial');
+	my $anio_inicial = param('anio_inicial');
+	my $dia_final = param('dia_final');
+	my $mes_final = param('mes_final');
+	my $anio_final = param('anio_final');
+
+	if ($formato eq "html")
+	{
+		print header();
+		&head_html("", "Men&uacute; de Usuarios - Consulta de Consumos", "#ffffff");
+	}
+
+	if (!(&chequeo_password_radius_para_usuarios($usuario, $password)))
+	{
+		&return_error_mysql ("Error en el proceso", "Usuario o password incorrecta", "")
+	}
+
+	my $fecha_inicial = $anio_inicial."-".$mes_inicial."-".$dia_inicial." 00:00:00";
+	my $fecha_final = $anio_final."-".$mes_final."-".$dia_final." 23:59:59";
+
+	$dbh = Mysql->connect($host, $database, $dbuser, $dbpass);
+	$errmsg = Mysql->errmsg();
+	if ($errmsg ne "")
+	{
+		&return_error_mysql ("Error en el proceso", "No se pudo establecer conexi&oacute;n con la Base de Datos.<BR>Consulte al Administrador de la misma.", $errmsg);
+	}
+
+	$sql_statement = "SELECT AcctStartTime, AcctStopTime, AcctSessionTime, AcctOutputOctets, AcctInputOctets, NASPortId FROM radacct WHERE (UserName like '".$usuario."' AND AcctStopTime BETWEEN '".$fecha_inicial."' AND '".$fecha_final."') ORDER BY AcctStartTime";
+	$sth = $dbh->query($sql_statement)
+	or die &return_error_mysql ("Error en el proceso", "Hubo un error en la consulta a la Base de Datos.<BR>Consulte al Administrador de la misma", $dbh->errmsg());
+		
+	if ($formato eq "pdf")
+	{
+		open (FILETEMP, ">/tmp/$$.html");
+		select FILETEMP; 
+		print <<Eof_Head;
+<HTML>
+ <HEAD>
+  <TITLE>
+   Men&uacute; de Usuarios - Consulta de Consumos
+  </TITLE>
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+Eof_Head
+	}
+
+	if ($formato eq "html")
+	{
+		print "  <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"4\">\n";
+		print "   <DIV ALIGN=\"right\">\n";
+		print "    <A HREF=\"usuarios_sabana.xls?usuario=$usuario&password=$password&dia_inicial=$dia_inicial&mes_inicial=$mes_inicial&anio_inicial=$anio_inicial&dia_final=$dia_final&mes_final=$mes_final&anio_final=$anio_final&formato=xls\">\n";
+		print "     <B>\n";
+		print "      .xls\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "    &nbsp;\n";
+		print "    <A HREF=\"usuarios_sabana.pdf?usuario=$usuario&password=$password&dia_inicial=$dia_inicial&mes_inicial=$mes_inicial&anio_inicial=$anio_inicial&dia_final=$dia_final&mes_final=$mes_final&anio_final=$anio_final&formato=pdf\">\n";
+		print "     <B>\n";
+		print "      .pdf\n";
+		print "     </B>\n";
+		print "    </A>\n";
+		print "   </DIV>\n";
+		print "  </FONT>\n";
+		print "  <BR>\n";
+		print "  <FORM ACTION=\"usuarios_sabana.html\" METHOD=\"post\">\n";
+		print "   <INPUT TYPE=\"hidden\" NAME=\"usuario\" VALUE=\"$usuario\">\n";
+		print "   <INPUT TYPE=\"hidden\" NAME=\"password\" VALUE=\"$password\">\n";
+		print "   <INPUT TYPE=\"hidden\" NAME=\"formato\" VALUE=\"html\">\n";
+	}
+
+	if ($formato eq "xls")
+	{
+		@titulos = ("Nro.", "Inicio Sesion", "Fin Sesion", "Duracion", "Bytes Entrantes", "Bytes Salientes", "Puerto");
+		$ss->write_row(\@titulos);
+	}
+	else
+	{
+		$nombre = &obtener_nombre($usuario);
+		print "   <TABLE bgcolor=\"#ffffff\" BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\" ALIGN=\"center\">\n";
+		print "    <TR>\n";
+		print "     <TD COLSPAN=\"6\" ALIGN=\"center\">\n";
+		print "      <CAPTION>\n";
+		print "       <H4>\n";
+		print "        <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\">\n";
+		print "         Consumo de \n";
+		print "         <B>\n";
+		print "          $usuario\n";
+		print "         </B>\n";
+		if ($nombre ne "")
+		{
+			print "         &nbsp; \n";
+			print "         -\n";
+			print "         &nbsp; \n";
+			print "         $nombre\n";
+			print "         &nbsp; \n";
+		}
+		print "         &nbsp; \n";
+		print "         <BR>\n";
+		print "         correspondiente al periodo\n";
+		print "         &nbsp; \n";
+		print "         <B>\n";
+		print "          $dia_inicial/$mes_inicial/$anio_inicial\n";
+		print "          &nbsp; \n";
+		print "          al\n";
+		print "          &nbsp; \n";
+		print "          $dia_final/$mes_final/$anio_final\n";
+		print "         </B>\n";
+		print "        </font>\n";
+		print "       </H4>\n";
+		print "      </CAPTION>\n";
+		print "     </TD>\n";
+		print "    </TR>\n";
+
+		print "    <TR BGCOLOR=\"#daa520\" HEIGHT=\"16\">\n";
+		print "     <TD ALIGN=\"center\" WIDTH=50 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Nro.\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=140 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Inicio de\n";
+		print "         <BR>\n";
+		print "         Sesi&oacute;n\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=50 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Fin de\n";
+		print "         <BR>\n";
+		print "         Sesi&oacute;n\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=125 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Duraci&oacute;n\n";
+		print "         <BR>\n";
+		print "         (segundos)\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=110 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Bytes\n";
+		print "         <BR>\n";
+		print "         Entrantes\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=90 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Bytes\n";
+		print "         <BR>\n";
+		print "         Salientes\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"center\" WIDTH=50 VALIGN=\"middle\" NOWRAP>\n";
+		print "      <H5>\n";
+		print "       <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" color=\"white\">\n";
+		print "        <B>\n";
+		print "         Puerto\n";
+		print "        </B>\n";
+		print "       </FONT>\n";
+		print "      </H5>\n";
+		print "     </TD>\n";
+		print "    </TR>\n";
+	}
+
+	$contador = 1;
+	$background_color = "#ffebcd";
+	my $session_time = 0;
+	my $input_octets = 0;
+	my $output_octets = 0;
+	while (@arr = $sth->fetchrow)
+	{
+		$session_time = $session_time + $arr[2];
+		$input_octets = $input_octets + $arr[3];
+		$output_octets = $output_octets + $arr[4];
+		$arr[2] = &segundos2hora($arr[2]);
+		if ($formato eq "xls")
+		{
+			@cadena = ($contador, $arr[0], $arr[1], $arr[2], $arr[3], $arr[4], $arr[5]);
+			$ss->write_row(\@cadena);
+		}
+		else
+		{
+			if ($background_color eq "#ffffff")
+			{
+				$background_color = "#ffebcd";
+			}
+			else
+			{
+				$background_color = "#ffffff";
+			}
+
+			print "    <TR BGCOLOR=\"$background_color\">\n";
+			print "     <TD ALIGN=\"right\" WIDTH=50>\n";
+			print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "       $contador &nbsp;\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"left\" WIDTH=140>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "       $arr[0]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"right\" WIDTH=140 NOWRAP>\n";
+			print "      <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"1\">\n";
+			print "       $arr[1]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"right\" WIDTH=50 NOWRAP>\n";
+			print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "       $arr[2]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"right\" WIDTH=90>\n";
+			print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "       $arr[3]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"right\" WIDTH=90 NOWRAP>\n";
+			print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "       $arr[4]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "     <TD ALIGN=\"right\" WIDTH=50 NOWRAP>\n";
+			print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+			print "       $arr[5]\n";
+			print "      </FONT>\n";
+			print "     </TD>\n";
+			print "    </TR>\n";
+		}
+		$contador++;
+	}
+
+	$session_time = &segundos2hora($session_time);
+
+	if ($formato eq "xls")
+	{
+		@total = ("", "", "Totales", $session_time, $input_octets, $output_octets, "");
+		$ss->write_row(\@total);
+		print "Content-Type: application/excel\n\n";
+		print $ss->data;
+	}
+	else
+	{
+		if ($background_color eq "#ffffff")
+		{
+			$background_color = "#ffebcd";
+		}
+		else
+		{
+			$background_color = "#ffffff";
+		}
+		print "    <TR BGCOLOR=\"$background_color\">\n";
+		print "     <TD ALIGN=\"left\" COLSPAN=\"3\">\n";
+		print "      <DIV ALIGN=\"right\">\n";
+		print "       <b>\n";
+		print "        <font face=\"Arial, Helvetica, Geneva, Swiss, SunSans-Regular\" size=\"2\">\n";
+		print "         Totales: &nbsp; &nbsp; \n";
+		print "        </font>\n";
+		print "       </b>\n";
+		print "      </div>\n";
+		print "     </td>\n";
+		print "     <TD ALIGN=\"right\" width=\"60\" NOWRAP>\n";
+		print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+		print "       <b>\n";
+		print "        $session_time\n";
+		print "       </b>\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"right\" width=\"60\" NOWRAP>\n";
+		print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+		print "       <b>\n";
+		print "        $input_octets\n";
+		print "       </b>\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"right\" width=\"60\" NOWRAP>\n";
+		print "      <font face=\"Courier, Courier New, Monaco\" size=\"2\">\n";
+		print "       <b>\n";
+		print "        $output_octets\n";
+		print "       </b>\n";
+		print "      </FONT>\n";
+		print "     </TD>\n";
+		print "     <TD ALIGN=\"left\" COLSPAN=\"1\" BGCOLOR=\"$background_color\">\n";
+		print "      &nbsp; \n";
+		print "     </td>\n";
+		print "    </TR>\n";
+		print "   </TABLE>\n";
+		print "   <BR>\n";
+	}
+
+	if ($formato eq "html")
+	{
+		print "   <TABLE bgcolor=\"#ffffff\" BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\" ALIGN=\"center\">\n";
+		($anio_inicial)= ($anio_inicial=~ /.{2}(.{2})/);
+		($anio_final)= ($anio_final=~ /.{2}(.{2})/);
+		&menu_usuarios_sabana($dia_inicial, $mes_inicial, $anio_inicial, $dia_final, $mes_final, $anio_final);
+	}
+
+	if ($formato eq "pdf")
+	{
+		print " </BODY>\n";
+		print "</HTML>\n";
+		close(FILETEMP); 
+		select(STDOUT); 
+		$| = 1;
+		print "Content-Type: application/pdf\n\n";
+		system "/usr/bin/htmldoc --format pdf14 --quiet --size A4 --landscape --webpage /tmp/$$.html";
+		exit(0);
+	}
+}
+else
+{
+	print header();
+	&head_html("", "Radius - Administraci&oacute;n de Usuarios - Consulta de Consumos Individuales", "#ffffff");
+	&return_error_mysql ("Error en el proceso", "No puede ingresar directamente a esta p&aacute;gina", "");
+}
+&tail_html("/usuarios/usuarios.html");
+exit(0);
